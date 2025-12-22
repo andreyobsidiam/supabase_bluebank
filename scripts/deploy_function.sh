@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 # Load environment variables from .env.local file
-source .env.local
+source .env.production
 
 supabase link --project-ref "$PROJECT_REF"
 

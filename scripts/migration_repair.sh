@@ -19,7 +19,7 @@ cd supabase
 # Link the Supabase project
 supabase link --project-ref $PROJECT_REF
 # Mark specified migrations as reverted
-supabase migration repair --status reverted 0022
+supabase migration repair --status reverted 0029
 
 if [ $? -eq 0 ]; then
     echo "✅ Migraciones marcadas como reverted exitosamente"

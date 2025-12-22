@@ -11,7 +11,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 # Load environment variables from .env.local file
-source .env.local
+source .env.production
+
+supabase link --project-ref "$PROJECT_REF"
+
 
 # Navigate to supabase directory
 cd supabase
@@ -20,10 +23,28 @@ echo "Starting deployment of all Supabase Edge Functions..."
 echo "Functions will be deployed in dependency order:"
 echo ""
 
+# Define deployment order based on logical dependencies:
+# 1. email_provider_config - Authentication setup
+# 2. manage_password_policies - System policies
+# 3. manage_report_status - Status catalog management
+# 4. manage_banks - Bank entities
+# 5. manage_locations - Geographic locations
+# 6. manage_atms - ATM inventory (depends on banks & locations)
+# 7. manage_users - User management (depends on banks)
 
 FUNCTIONS_ORDER=(
-    "send-otp"
-    "sumsub-proxy"
+    "manage_users"
+    "manage_locations"
+    "manage_password_policies"
+    "manage_report_status"
+    "manage_banks"
+    "manage_atms"
+    "manage_failure_types"
+    "manage_reports"
+    "manage_report_templates"
+    "dashboard_metrics"
+    "manage_notifications"
+    "send_push_notification"
 )
 
 FAILED_DEPLOYS=()
