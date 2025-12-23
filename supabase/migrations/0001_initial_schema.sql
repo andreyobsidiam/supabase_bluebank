@@ -66,25 +66,32 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_logs ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for admins table
+DROP POLICY IF EXISTS "Admins can view own admin record" ON public.admins;
 CREATE POLICY "Admins can view own admin record" ON public.admins
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Admins can update own admin record" ON public.admins;
 CREATE POLICY "Admins can update own admin record" ON public.admins
   FOR UPDATE USING (auth.uid() = id);
 
 -- RLS Policies for profiles table
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 CREATE POLICY "Users can view own profile" ON public.profiles
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles
   FOR UPDATE USING (auth.uid() = id);
 
 -- RLS Policies for user_logs table
+DROP POLICY IF EXISTS "Users can view own logs" ON public.user_logs;
 CREATE POLICY "Users can view own logs" ON public.user_logs
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Allow backend and user to insert audit logs" ON public.user_logs;
 CREATE POLICY "Allow backend and user to insert audit logs" ON public.user_logs
   FOR INSERT WITH CHECK ((auth.role() = 'service_role'::text) OR (user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "Allow backend to read all audit logs" ON public.user_logs;
 CREATE POLICY "Allow backend to read all audit logs" ON public.user_logs
   FOR SELECT USING (true);
