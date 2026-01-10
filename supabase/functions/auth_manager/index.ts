@@ -6,6 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 enum AuthAction {
   LOGIN = "login",
   CREATE = "create",
+  SYNC = "sync",
 }
 
 interface AuthRequest {
@@ -222,14 +223,6 @@ Deno.serve(async (req: Request) => {
 
         if (profileError) {
           console.error("Profile creation error:", profileError);
-          console.error("Profile error details:", {
-            message: profileError.message,
-            details: profileError.details,
-            hint: profileError.hint,
-            code: profileError.code,
-          });
-          // If profile creation fails, we should clean up the auth user
-          // But for simplicity, we'll just return the error
           const errorResponse: ErrorResponse = {
             error: `failed_to_create_user_profile: ${
               profileError.message || profileError.code || "unknown error"
@@ -269,6 +262,144 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 201,
         });
+      }
+
+      case AuthAction.SYNC: {
+        // SYNC LOGIC: Verify if user exists, update password if yes, create if no.
+        if (!identifier || !logon_id || !password) {
+          const errorResponse: ErrorResponse = {
+            error: "identifier_logon_id_and_password_are_required_for_sync",
+          };
+          return new Response(JSON.stringify(errorResponse), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          });
+        }
+
+        // Check if user exists by logon_id OR email
+        const { data: existingProfile } = await serviceSupabase
+          .from("profiles")
+          .select("*")
+          .or(`logon_id.eq.${logon_id.trim()},email.eq.${identifier.trim()}`)
+          .maybeSingle();
+
+        if (existingProfile) {
+          // UPDATE PASSWORD if user already exists
+          const { error: updateError } =
+            await serviceSupabase.auth.admin.updateUserById(
+              existingProfile.id,
+              { password: password }
+            );
+
+          if (updateError) {
+            const errorResponse: ErrorResponse = {
+              error: `failed_to_update_password: ${updateError.message}`,
+            };
+            return new Response(JSON.stringify(errorResponse), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 500,
+            });
+          }
+
+          // Sign in to get session with the new password
+          const { data: signInData, error: signInError } =
+            await supabase.auth.signInWithPassword({
+              email: existingProfile.email,
+              password: password,
+            });
+
+          if (signInError) {
+            const errorResponse: ErrorResponse = {
+              error: `failed_to_sign_in_after_update: ${signInError.message}`,
+            };
+            return new Response(JSON.stringify(errorResponse), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 401,
+            });
+          }
+
+          const authResponse: AuthResponse = {
+            user: signInData.user,
+            session: signInData.session,
+            user_profile: existingProfile,
+            message: "User password updated and logged in successfully",
+          };
+          return new Response(JSON.stringify(authResponse), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
+        } else {
+          // CREATE USER if not found (Same logic as CREATE case)
+          const { data: authData, error: signUpError } =
+            await serviceSupabase.auth.admin.createUser({
+              email: identifier.trim(),
+              password: password,
+              email_confirm: true,
+            });
+
+          if (signUpError) {
+            const errorResponse: ErrorResponse = {
+              error: signUpError.message,
+            };
+            return new Response(JSON.stringify(errorResponse), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 400,
+            });
+          }
+
+          const { data: signInData, error: signInError } =
+            await adminSupabase.auth.signInWithPassword({
+              email: identifier.trim(),
+              password: password,
+            });
+
+          if (signInError) {
+            const errorResponse: ErrorResponse = {
+              error: signInError.message,
+            };
+            return new Response(JSON.stringify(errorResponse), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 400,
+            });
+          }
+
+          const { error: profileError } = await serviceSupabase
+            .from("profiles")
+            .insert({
+              id: signInData.user.id,
+              email: identifier.trim(),
+              logon_id: logon_id.trim(),
+              name: name?.trim() || null,
+              phone_number: phone_number?.trim() || null,
+            });
+
+          if (profileError) {
+            const errorResponse: ErrorResponse = {
+              error: `failed_to_create_profile: ${profileError.message}`,
+            };
+            return new Response(JSON.stringify(errorResponse), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 500,
+            });
+          }
+
+          const { data: userProfile } = await serviceSupabase
+            .from("profiles")
+            .select("*")
+            .eq("id", signInData.user.id)
+            .single();
+
+          const authResponse: AuthResponse = {
+            user: signInData.user,
+            session: signInData.session,
+            user_profile: userProfile,
+            message: "User created and logged in successfully",
+          };
+          return new Response(JSON.stringify(authResponse), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 201,
+          });
+        }
       }
 
       default: {
