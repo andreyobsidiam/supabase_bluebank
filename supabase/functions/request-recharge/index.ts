@@ -46,6 +46,7 @@ interface RechargeRequestRecord {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const NOTIFICATION_EMAIL = Deno.env.get("NOTIFICATION_EMAIL")!;
 
 // --- Helpers ---
 
@@ -69,6 +70,38 @@ const verifyAdmin = async (
   return !error && !!admin;
 };
 
+const sendEmail = async (rechargeData: RechargeRequestRecord) => {
+  try {
+    console.log(
+      `[RECHARGE] Sending public internal notification for Folio: ${rechargeData.folio}`
+    );
+
+    // Llamada sin cabeceras de auth ya que la función se desplegó con --no-verify-jwt
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        templateId: "RECHARGE_REQUEST",
+        to: NOTIFICATION_EMAIL,
+        data: rechargeData,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Email service error (${response.status}): ${errorText}`);
+    }
+
+    console.log(
+      `[RECHARGE] Email notification sent successfully (Public call)`
+    );
+  } catch (error) {
+    console.error(`[RECHARGE] Critical error in sendEmail:`, error);
+  }
+};
+
 // --- Action Handlers ---
 
 const handleRequestRecharge = async (
@@ -86,6 +119,7 @@ const handleRequestRecharge = async (
     };
   }
 
+  // Insert and select with profile details
   const { data, error } = await supabase
     .from("recharge_requests")
     .insert({
@@ -95,12 +129,36 @@ const handleRequestRecharge = async (
       amount,
       status: "PENDING",
     })
-    .select()
+    .select(
+      `
+      *,
+      profiles:user_id (
+        name,
+        email
+      )
+    `
+    )
     .single();
 
   if (error) throw error;
 
   console.log(`[RECHARGE] Folio: ${data.folio} requested for user ${userId}`);
+
+  // Send email notification asynchronously
+  const emailPayload = data as RechargeRequestRecord;
+  console.log(
+    `[RECHARGE] Triggering email with payload:`,
+    JSON.stringify(emailPayload)
+  );
+
+  sendEmail(emailPayload)
+    .then(() => {
+      console.log(`[RECHARGE] Background email trigger completed successfully`);
+    })
+    .catch((err) => {
+      console.error("[RECHARGE] Background email trigger failed:", err);
+    });
+
   return data;
 };
 

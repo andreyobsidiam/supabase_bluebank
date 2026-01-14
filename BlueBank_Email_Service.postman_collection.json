@@ -1,0 +1,44 @@
+{
+  "info": {
+    "_postman_id": "bluebank-email-service",
+    "name": "BlueBank Email Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Send Recharge Request Email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{SUPABASE_SERVICE_ROLE_KEY}}",
+            "description": "Tu Service Role Key de Supabase"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"templateId\": \"RECHARGE_REQUEST\",\n    \"to\": \"andrey.delgado@obsidiam.com\",\n    \"data\": {\n        \"folio\": \"REC-000001\",\n        \"created_at\": \"2026-01-14T15:00:00Z\",\n        \"amount\": 150.50,\n        \"origin_account\": \"US-99-1234-5678\",\n        \"destination_card\": \"**** **** **** 4422\",\n        \"profiles\": {\n            \"name\": \"Daniel Zuloaga\",\n            \"email\": \"daniel@example.com\"\n        }\n    }\n}"
+        },
+        "url": {
+          "raw": "https://pteefblczredmbefsjyw.supabase.co/functions/v1/send-email",
+          "protocol": "https",
+          "host": ["pteefblczredmbefsjyw", "supabase", "co"],
+          "path": ["functions", "v1", "send-email"]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "SUPABASE_SERVICE_ROLE_KEY",
+      "value": "TU_SERVICE_ROLE_KEY_AQUI",
+      "type": "string"
+    }
+  ]
+}
